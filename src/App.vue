@@ -12,6 +12,7 @@
       @load-sample="loadSample"
       @open-share="openShareModal"
       @open-history="showHistoryDrawer = true"
+      @open-bookmarklet="showBookmarkletModal = true"
       @reset-view="resetToDefault"
     />
 
@@ -229,6 +230,13 @@
       @toast="triggerToast"
     />
 
+    <!-- Bookmarklet Modal -->
+    <BookmarkletModal
+      v-if="showBookmarkletModal"
+      @close="showBookmarkletModal = false"
+      @toast="triggerToast"
+    />
+
     <!-- Toast Notifications -->
     <ToastNotification ref="toastRef" />
   </div>
@@ -244,6 +252,7 @@ import JsonTypeGenerator from './components/JsonTypeGenerator.vue'
 import JsonDiffViewer from './components/JsonDiffViewer.vue'
 import ShareModal from './components/ShareModal.vue'
 import HistoryDrawer from './components/HistoryDrawer.vue'
+import BookmarkletModal from './components/BookmarkletModal.vue'
 import ToastNotification from './components/ToastNotification.vue'
 
 import { useJsonState } from './composables/useJsonState'
@@ -279,6 +288,7 @@ const { saveToHistory } = useHistory()
 
 const showShareModal = ref(false)
 const showHistoryDrawer = ref(false)
+const showBookmarkletModal = ref(false)
 const isSplitView = ref(true)
 const toastRef = ref(null)
 
@@ -358,7 +368,20 @@ function handleGlobalKeydown(e) {
 onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeydown)
 
-  // Check if opened with a shared payload or short link in URL hash
+  // 1. Check if opened via browser bookmarklet
+  if (window.name && window.name.startsWith('JSONSHARE_DATA:')) {
+    try {
+      const bookmarkletData = window.name.substring(16)
+      window.name = '' // clear name
+      setRawJson(bookmarkletData)
+      triggerToast('Opened from Browser Bookmarklet!', 'success')
+      return
+    } catch (e) {
+      console.warn('Failed to parse bookmarklet payload', e)
+    }
+  }
+
+  // 2. Check if opened with a shared payload or short link in URL hash
   const shared = await checkUrlForSharedData()
   if (shared && shared.data) {
     setRawJson(shared.data)

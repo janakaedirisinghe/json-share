@@ -109,6 +109,18 @@
 
       <div class="divider"></div>
 
+      <!-- Bookmarklet Modal Toggle -->
+      <button
+        class="btn btn-ghost btn-sm"
+        @click="$emit('open-bookmarklet')"
+        title="Install Browser Bookmarklet"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span class="hide-mobile">Bookmarklet</span>
+      </button>
+
       <!-- History Drawer Toggle -->
       <button
         class="btn btn-ghost btn-sm"
@@ -180,6 +192,7 @@ const emit = defineEmits([
   'load-sample',
   'open-share',
   'open-history',
+  'open-bookmarklet',
   'reset-view'
 ])
 
