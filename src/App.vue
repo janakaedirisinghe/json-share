@@ -374,6 +374,7 @@ onMounted(async () => {
       const bookmarkletData = window.name.substring(16)
       window.name = '' // clear name
       setRawJson(bookmarkletData)
+      formatJson(2)
       triggerToast('Opened from Browser Bookmarklet!', 'success')
       return
     } catch (e) {
