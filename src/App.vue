@@ -28,11 +28,18 @@
         <span>Viewing a <strong>Shared JSON Document</strong> via zero-backend link</span>
       </div>
       <div class="banner-actions">
-        <button class="btn btn-sm btn-ghost" @click="saveCurrentToHistory">
-          Save to History
+        <button class="btn btn-sm btn-banner" @click="saveCurrentToHistory" title="Save this document to your local history">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>Save to History</span>
         </button>
-        <button class="btn btn-sm btn-ghost" @click="clearShareUrl">
-          New Document
+        <button class="btn btn-sm btn-banner" @click="clearShareUrl" title="Create a new document">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>New Document</span>
         </button>
       </div>
     </div>
@@ -393,6 +400,22 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.btn-banner {
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #ffffff !important;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  transition: all 0.15s ease;
+}
+
+.btn-banner:hover {
+  background: rgba(255, 255, 255, 0.38);
+  border-color: #ffffff;
+  color: #ffffff !important;
+  transform: translateY(-1px);
 }
 
 .mode-bar {
