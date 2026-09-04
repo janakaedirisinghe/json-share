@@ -205,7 +205,11 @@
         <span class="footer-hint">100% Client-Side</span>
       </div>
       <div class="footer-right">
-        <span>Made with ❤️ by <a href="https://janakaedirisinghe.com/" target="_blank" rel="noopener noreferrer" class="footer-author-link">Janaka Edirisinghe</a></span>
+        <span>Made with ❤️ by</span>
+        <a href="https://janakaedirisinghe.com/" target="_blank" rel="noopener noreferrer" class="footer-author-link">
+          <img src="https://janakaedirisinghe.com/u/github_avatar.png" alt="Janaka Edirisinghe" class="author-avatar" />
+          <span>Janaka Edirisinghe</span>
+        </a>
       </div>
     </footer>
 
@@ -541,7 +545,19 @@ onUnmounted(() => {
   color: var(--text-main);
 }
 
+.author-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(13, 180, 158, 0.4);
+  object-fit: cover;
+  vertical-align: middle;
+}
+
 .footer-author-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--accent-primary);
   text-decoration: none;
   font-weight: 500;
