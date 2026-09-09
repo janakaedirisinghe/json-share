@@ -111,6 +111,21 @@
 
         <button
           class="mode-tab"
+          :class="{ active: activeTab === 'graph' }"
+          @click="activeTab = 'graph'"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+          <span>Visual Graph</span>
+        </button>
+
+        <button
+          class="mode-tab"
           :class="{ active: activeTab === 'types' }"
           @click="activeTab = 'types'"
         >
@@ -182,6 +197,14 @@
           @toast="triggerToast"
         />
 
+        <!-- Visual Graph View -->
+        <JsonGraphView
+          v-else-if="activeTab === 'graph'"
+          :parsed-data="parsedJson"
+          :raw-json="rawJson"
+          @toast="triggerToast"
+        />
+
         <!-- Type Generator -->
         <JsonTypeGenerator
           v-else-if="activeTab === 'types'"
@@ -248,6 +271,7 @@ import HeaderNav from './components/HeaderNav.vue'
 import JsonInputEditor from './components/JsonInputEditor.vue'
 import JsonTreeView from './components/JsonTreeView.vue'
 import JsonTableView from './components/JsonTableView.vue'
+import JsonGraphView from './components/JsonGraphView.vue'
 import JsonTypeGenerator from './components/JsonTypeGenerator.vue'
 import JsonDiffViewer from './components/JsonDiffViewer.vue'
 import ShareModal from './components/ShareModal.vue'
