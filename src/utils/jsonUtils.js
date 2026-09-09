@@ -179,3 +179,52 @@ export function exportToCSV(columns, rows) {
 
   return [headerRow, ...dataRows].join('\n')
 }
+
+/**
+ * Finds all paths in JSON structure that match query in key or primitive value
+ */
+export function findJsonMatches(data, query) {
+  if (!query || !query.trim() || data === undefined) return []
+  const q = query.trim().toLowerCase()
+  const matches = []
+
+  function traverse(node, currentPath, nodeKey) {
+    let isMatch = false
+    
+    // Check if key matches
+    if (nodeKey !== null && nodeKey !== undefined && String(nodeKey).toLowerCase().includes(q)) {
+      isMatch = true
+    }
+    
+    // Check if primitive value matches
+    if (node === null || typeof node !== 'object') {
+      if (String(node).toLowerCase().includes(q)) {
+        isMatch = true
+      }
+    }
+
+    if (isMatch) {
+      matches.push({
+        path: currentPath,
+        pathKey: JSON.stringify(currentPath),
+        key: nodeKey,
+        value: node
+      })
+    }
+
+    if (node !== null && typeof node === 'object') {
+      if (Array.isArray(node)) {
+        node.forEach((item, idx) => {
+          traverse(item, [...currentPath, idx], idx)
+        })
+      } else {
+        Object.keys(node).forEach(key => {
+          traverse(node[key], [...currentPath, key], key)
+        })
+      }
+    }
+  }
+
+  traverse(data, [], null)
+  return matches
+}

@@ -1,5 +1,9 @@
 <template>
-  <div class="tree-node" :class="{ 'node-matched': isDirectMatch }">
+  <div
+    class="tree-node"
+    :class="{ 'node-matched': isDirectMatch, 'node-active-match': isActiveMatch }"
+    :data-tree-path="pathKey"
+  >
     <div class="node-line" @click="handleLineClick">
       <!-- Expand/Collapse Chevron -->
       <button
@@ -114,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import { buildPath } from '../utils/jsonUtils'
 
 const props = defineProps({
@@ -153,6 +157,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['toast'])
+const treeSearch = inject('treeSearch', null)
 
 const isExpanded = ref(props.depth < 2)
 
@@ -165,6 +170,8 @@ const isArray = computed(() => {
 })
 
 const isExpandable = computed(() => isObject.value || isArray.value)
+
+const pathKey = computed(() => JSON.stringify(props.path))
 
 const objectKeyCount = computed(() => {
   if (!isObject.value) return 0
@@ -212,6 +219,24 @@ const isDirectMatch = computed(() => {
   const valStr = String(props.data || '').toLowerCase()
   return keyStr.includes(q) || valStr.includes(q)
 })
+
+const isActiveMatch = computed(() => {
+  if (!treeSearch?.activePathKey?.value) return false
+  return treeSearch.activePathKey.value === pathKey.value
+})
+
+// Auto-expand if this node is an ancestor of the currently active search match
+watch(() => treeSearch?.activePath?.value, (newActivePath) => {
+  if (!newActivePath || !newActivePath.length) return
+  if (!isExpandable.value) return
+  
+  if (props.path.length < newActivePath.length) {
+    const isAncestor = props.path.every((seg, idx) => seg === newActivePath[idx])
+    if (isAncestor) {
+      isExpanded.value = true
+    }
+  }
+}, { immediate: true })
 
 // React to global expand / collapse triggers
 watch(() => props.expandAll, (val) => {
@@ -290,6 +315,12 @@ async function copyValue() {
 
 .node-matched {
   background: rgba(251, 191, 36, 0.15);
+  border-radius: var(--radius-sm);
+}
+
+.node-active-match > .node-line {
+  background: rgba(245, 158, 11, 0.3) !important;
+  box-shadow: 0 0 0 1.5px #f59e0b, 0 0 10px rgba(245, 158, 11, 0.35);
   border-radius: var(--radius-sm);
 }
 
