@@ -10,7 +10,48 @@
         </div>
         <div class="brand-info">
           <span class="brand-title">JSON<span class="brand-accent">Share</span></span>
-          <span class="brand-tag">v1.0</span>
+          <span class="brand-tag">v1.1</span>
+        </div>
+      </div>
+
+      <!-- Language Selector Dropdown -->
+      <div class="dropdown-wrapper">
+        <button class="btn btn-ghost btn-sm dropdown-btn lang-select-btn" @click="toggleLangMenu">
+          <span class="lang-indicator-dot" :class="{ 'dot-json': language === 'json' }"></span>
+          <span class="lang-btn-name">{{ currentLangObj.name }}</span>
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
+        <div v-if="showLangMenu" class="dropdown-menu lang-dropdown-menu">
+          <div class="dropdown-section-title">Primary Format</div>
+          <div
+            class="dropdown-item"
+            :class="{ active: language === 'json' }"
+            @click="chooseLanguage('json')"
+          >
+            <div class="lang-item-row">
+              <span class="lang-item-title">JSON</span>
+              <span class="lang-item-badge">Full Suite</span>
+            </div>
+            <div class="lang-item-desc">Tree, Graph, Table, Types & Diff</div>
+          </div>
+
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-section-title">Code Snippets</div>
+          <div class="lang-grid">
+            <div
+              v-for="lang in snippetLanguages"
+              :key="lang.id"
+              class="lang-grid-item"
+              :class="{ active: language === lang.id }"
+              @click="chooseLanguage(lang.id)"
+            >
+              <span class="grid-item-name">{{ lang.name }}</span>
+              <span class="grid-item-ext">{{ lang.ext }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -43,17 +84,22 @@
         </div>
       </div>
 
-      <!-- Live JSON Stats Pill -->
-      <div v-if="hasContent" class="stats-pill" :class="{ 'stats-invalid': !isValid }">
+      <!-- Live JSON / Snippet Stats Pill -->
+      <div v-if="hasContent" class="stats-pill" :class="{ 'stats-invalid': language === 'json' && !isValid }">
         <span class="status-dot"></span>
-        <span v-if="isValid">{{ stats.formattedSize }} · {{ stats.keyCount }} keys · Depth {{ stats.maxDepth }}</span>
-        <span v-else>Malformed JSON</span>
+        <span v-if="language === 'json'">
+          <span v-if="isValid">{{ stats.formattedSize }} · {{ stats.keyCount }} keys · Depth {{ stats.maxDepth }}</span>
+          <span v-else>Malformed JSON</span>
+        </span>
+        <span v-else>
+          <span>{{ stats.formattedSize }} · {{ lineCount }} lines</span>
+        </span>
       </div>
     </div>
 
     <div class="header-right">
-      <!-- Quick Formatter Actions -->
-      <div class="action-group">
+      <!-- Formatter Actions for JSON -->
+      <div v-if="language === 'json'" class="action-group">
         <button
           class="btn btn-ghost btn-sm"
           @click="$emit('format', 2)"
@@ -96,16 +142,31 @@
           </svg>
           <span>Auto Repair</span>
         </button>
+      </div>
 
+      <!-- Actions for Code Snippet (non-JSON) -->
+      <div v-else class="action-group">
         <button
-          v-if="hasContent"
           class="btn btn-ghost btn-sm"
-          @click="$emit('clear')"
-          title="Clear all"
+          @click="$emit('load-lang-sample')"
+          title="Load sample code for this language"
         >
-          <span>Clear</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+          <span>Load Snippet</span>
         </button>
       </div>
+
+      <button
+        v-if="hasContent"
+        class="btn btn-ghost btn-sm"
+        @click="$emit('clear')"
+        title="Clear all"
+      >
+        <span>Clear</span>
+      </button>
 
       <div class="divider"></div>
 
@@ -125,7 +186,7 @@
       <button
         class="btn btn-ghost btn-sm"
         @click="$emit('open-history')"
-        title="Saved JSON Snippets"
+        title="Saved Snippets & History"
       >
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
@@ -167,21 +228,30 @@
           <polyline points="16 6 12 2 8 6"></polyline>
           <line x1="12" y1="2" x2="12" y2="15"></line>
         </svg>
-        <span>Share Link</span>
+        <span>Share {{ language === 'json' ? 'JSON' : 'Snippet' }}</span>
       </button>
     </div>
   </header>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { SAMPLES } from '../utils/samples'
+import { SUPPORTED_LANGUAGES, getLanguageById } from '../utils/languages'
 import { useTheme } from '../composables/useTheme'
 
 const props = defineProps({
   hasContent: Boolean,
   isValid: Boolean,
-  stats: Object
+  stats: Object,
+  language: {
+    type: String,
+    default: 'json'
+  },
+  lineCount: {
+    type: Number,
+    default: 1
+  }
 })
 
 const emit = defineEmits([
@@ -190,6 +260,8 @@ const emit = defineEmits([
   'repair',
   'clear',
   'load-sample',
+  'load-lang-sample',
+  'select-language',
   'open-share',
   'open-history',
   'open-bookmarklet',
@@ -198,9 +270,24 @@ const emit = defineEmits([
 
 const { currentTheme, toggleTheme } = useTheme()
 const showSamplesMenu = ref(false)
+const showLangMenu = ref(false)
+
+const currentLangObj = computed(() => getLanguageById(props.language))
+const snippetLanguages = computed(() => SUPPORTED_LANGUAGES.filter(l => l.id !== 'json'))
+
+function toggleLangMenu() {
+  showLangMenu.value = !showLangMenu.value
+  showSamplesMenu.value = false
+}
 
 function toggleSamplesMenu() {
   showSamplesMenu.value = !showSamplesMenu.value
+  showLangMenu.value = false
+}
+
+function chooseLanguage(langId) {
+  emit('select-language', langId)
+  showLangMenu.value = false
 }
 
 function selectSample(id) {
@@ -250,14 +337,14 @@ function selectSample(id) {
 
 .brand-info {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
 }
 
 .brand-title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.5px;
   color: var(--text-main);
 }
 
@@ -267,40 +354,155 @@ function selectSample(id) {
 
 .brand-tag {
   font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+}
+
+/* Language Selector Dropdown */
+.lang-select-btn {
+  border-color: rgba(13, 180, 158, 0.3);
+  background: rgba(13, 180, 158, 0.08);
+}
+
+.lang-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--accent-purple);
+}
+
+.lang-indicator-dot.dot-json {
+  background-color: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary);
+}
+
+.lang-btn-name {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.lang-dropdown-menu {
+  width: 320px;
+  padding: 8px;
+}
+
+.dropdown-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-subtle);
+  padding: 4px 8px 6px;
+}
+
+.lang-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lang-item-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.lang-item-badge {
+  font-size: 10px;
   padding: 2px 6px;
   border-radius: var(--radius-full);
-  background: var(--bg-surface-hover);
+  background: rgba(13, 180, 158, 0.2);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.lang-item-desc {
+  font-size: 11px;
   color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 6px 0;
+}
+
+.lang-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.lang-grid-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.lang-grid-item:hover {
+  background: var(--bg-surface-hover);
+}
+
+.lang-grid-item.active {
+  background: rgba(13, 180, 158, 0.15);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.grid-item-name {
+  font-size: 12px;
+}
+
+.grid-item-ext {
+  font-size: 10px;
   font-family: var(--font-mono);
+  color: var(--text-subtle);
 }
 
 .dropdown-wrapper {
   position: relative;
 }
 
+.dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .dropdown-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   left: 0;
-  background: var(--bg-surface);
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   padding: 6px;
-  width: 250px;
   z-index: 100;
-  animation: fadeIn 0.15s ease-out;
+  animation: fadeIn 0.15s ease;
 }
 
 .dropdown-item {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.12s ease;
 }
 
 .dropdown-item:hover {
   background-color: var(--bg-surface-hover);
+}
+
+.dropdown-item.active {
+  background: rgba(13, 180, 158, 0.15);
 }
 
 .sample-title {
@@ -316,14 +518,14 @@ function selectSample(id) {
 }
 
 .stats-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
+  gap: 8px;
+  padding: 4px 12px;
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
-  font-size: 11px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
   font-family: var(--font-mono);
   color: var(--text-muted);
 }
@@ -332,18 +534,18 @@ function selectSample(id) {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-emerald);
-  box-shadow: 0 0 8px var(--accent-emerald);
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.stats-invalid .status-dot {
+  background-color: #f43f5e;
+  box-shadow: 0 0 6px #f43f5e;
 }
 
 .stats-invalid {
   border-color: rgba(244, 63, 94, 0.4);
-  color: var(--accent-rose);
-}
-
-.stats-invalid .status-dot {
-  background: var(--accent-rose);
-  box-shadow: 0 0 8px var(--accent-rose);
+  color: #f43f5e;
 }
 
 .action-group {
@@ -355,10 +557,10 @@ function selectSample(id) {
 .divider {
   width: 1px;
   height: 20px;
-  background: var(--border-subtle);
+  background-color: var(--border-subtle);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .hide-mobile {
     display: none;
   }

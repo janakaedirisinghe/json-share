@@ -13,14 +13,14 @@
           <polyline points="17 8 12 3 7 8"></polyline>
           <line x1="12" y1="3" x2="12" y2="15"></line>
         </svg>
-        <span>Drop your .json file here</span>
+        <span>Drop your {{ language === 'json' ? '.json' : 'code' }} file here</span>
       </div>
     </div>
 
     <!-- Top Toolbar -->
     <div class="editor-header">
       <div class="editor-title-group">
-        <span class="panel-label">JSON Source</span>
+        <span class="panel-label">{{ language === 'json' ? 'JSON Source' : `${langName} Editor` }}</span>
         <span class="line-count-badge">{{ lineCount }} lines</span>
       </div>
 
@@ -35,8 +35,13 @@
         </button>
 
         <!-- Upload File Button -->
-        <label class="btn btn-ghost btn-sm file-upload-btn" title="Upload JSON file">
-          <input type="file" accept=".json,.txt" @change="handleFileInput" class="hidden-file-input" />
+        <label class="btn btn-ghost btn-sm file-upload-btn" title="Upload file">
+          <input
+            type="file"
+            accept=".json,.txt,.py,.js,.ts,.sql,.yaml,.yml,.go,.rs,.html,.css,.sh,.md,.java,.cpp,.cs,.php"
+            @change="handleFileInput"
+            class="hidden-file-input"
+          />
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="17 8 12 3 7 8"></polyline>
@@ -45,7 +50,7 @@
           <span>Upload</span>
         </label>
 
-        <!-- Copy raw JSON -->
+        <!-- Copy raw code -->
         <button class="btn btn-ghost btn-sm" @click="handleCopyRaw" :disabled="!modelValue" title="Copy raw text">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -56,8 +61,28 @@
       </div>
     </div>
 
-    <!-- Error Banner -->
-    <div v-if="!isValid && parseError" class="error-banner">
+    <!-- Smart Auto-Detected Language Suggestion Banner -->
+    <div v-if="suggestedLanguage && suggestedLanguage !== language" class="suggestion-banner">
+      <div class="suggestion-info">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span>Looks like <strong>{{ suggestedLangName }}</strong> code snippet!</span>
+      </div>
+      <div class="suggestion-actions">
+        <button class="btn btn-emerald btn-sm" @click="applySuggestedLanguage">
+          Switch to {{ suggestedLangName }}
+        </button>
+        <button class="btn btn-ghost btn-sm btn-icon-only" @click="dismissSuggestion" title="Dismiss">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- JSON Error Banner (Only in JSON mode) -->
+    <div v-if="language === 'json' && !isValid && parseError" class="error-banner">
       <div class="error-info">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"></circle>
@@ -86,7 +111,7 @@
         @input="onInput"
         @scroll="syncScroll"
         @keydown="handleKeydown"
-        placeholder="// Paste JSON, Drag & Drop a .json file, or pick a sample above..."
+        :placeholder="editorPlaceholder"
         spellcheck="false"
       ></textarea>
     </div>
@@ -94,7 +119,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { getLanguageById, detectLanguage } from '../utils/languages'
 
 const props = defineProps({
   modelValue: {
@@ -108,19 +134,63 @@ const props = defineProps({
   parseError: {
     type: Object,
     default: null
+  },
+  language: {
+    type: String,
+    default: 'json'
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'repair', 'copied', 'toast'])
+const emit = defineEmits(['update:modelValue', 'repair', 'copied', 'toast', 'change-language'])
 
 const isDragging = ref(false)
 const textareaRef = ref(null)
 const lineNumbersRef = ref(null)
+const suggestedLanguage = ref(null)
+const dismissedSuggestionFor = ref('')
+
+const langName = computed(() => getLanguageById(props.language).name)
+const suggestedLangName = computed(() => suggestedLanguage.value ? getLanguageById(suggestedLanguage.value).name : '')
 
 const lineCount = computed(() => {
   if (!props.modelValue) return 1
   return props.modelValue.split('\n').length
 })
+
+const editorPlaceholder = computed(() => {
+  if (props.language === 'json') {
+    return '// Paste JSON, Drag & Drop a .json file, or pick a sample above...'
+  }
+  return `// Paste or write ${langName.value} code here...`
+})
+
+// Auto-detect non-JSON code when pasted into JSON mode
+watch(() => props.modelValue, (newVal) => {
+  if (props.language === 'json' && newVal && newVal.trim().length > 15) {
+    if (dismissedSuggestionFor.value === newVal.substring(0, 50)) return
+    const detected = detectLanguage(newVal)
+    if (detected && detected !== 'json') {
+      suggestedLanguage.value = detected
+      return
+    }
+  }
+  suggestedLanguage.value = null
+})
+
+function applySuggestedLanguage() {
+  if (suggestedLanguage.value) {
+    emit('change-language', suggestedLanguage.value)
+    emit('toast', `Switched to ${suggestedLangName.value} Snippet mode!`, 'success')
+    suggestedLanguage.value = null
+  }
+}
+
+function dismissSuggestion() {
+  if (props.modelValue) {
+    dismissedSuggestionFor.value = props.modelValue.substring(0, 50)
+  }
+  suggestedLanguage.value = null
+}
 
 function onInput(e) {
   emit('update:modelValue', e.target.value)
@@ -163,7 +233,7 @@ async function handleCopyRaw() {
   if (!props.modelValue) return
   try {
     await navigator.clipboard.writeText(props.modelValue)
-    emit('toast', 'Copied raw JSON to clipboard', 'success')
+    emit('toast', 'Copied text to clipboard', 'success')
   } catch {
     emit('toast', 'Failed to copy', 'error')
   }
@@ -190,6 +260,31 @@ function readFile(file) {
     const content = evt.target?.result
     if (typeof content === 'string') {
       emit('update:modelValue', content)
+      
+      // Auto switch language based on file extension
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      const extLangMap = {
+        py: 'python',
+        sql: 'sql',
+        js: 'javascript',
+        ts: 'typescript',
+        yaml: 'yaml',
+        yml: 'yaml',
+        html: 'html',
+        css: 'css',
+        go: 'go',
+        rs: 'rust',
+        sh: 'bash',
+        md: 'markdown',
+        json: 'json',
+        java: 'java',
+        cpp: 'cpp',
+        cs: 'csharp',
+        php: 'php'
+      }
+      if (ext && extLangMap[ext]) {
+        emit('change-language', extLangMap[ext])
+      }
       emit('toast', `Loaded "${file.name}"`, 'success')
     }
   }
@@ -254,8 +349,12 @@ function readFile(file) {
 
 .line-count-badge {
   font-size: 11px;
-  font-family: var(--font-mono);
+  padding: 2px 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
   color: var(--text-subtle);
+  font-family: var(--font-mono);
 }
 
 .editor-actions {
@@ -264,14 +363,46 @@ function readFile(file) {
   gap: 6px;
 }
 
-.hidden-file-input {
-  display: none;
-}
-
 .file-upload-btn {
+  position: relative;
   cursor: pointer;
 }
 
+.hidden-file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* Suggestion Banner */
+.suggestion-banner {
+  background: linear-gradient(90deg, rgba(88, 166, 255, 0.15) 0%, rgba(13, 180, 158, 0.15) 100%);
+  border-bottom: 1px solid rgba(88, 166, 255, 0.3);
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-main);
+  animation: fadeIn 0.15s ease;
+}
+
+.suggestion-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-cyan);
+}
+
+.suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Error Banner */
 .error-banner {
   background: rgba(244, 63, 94, 0.12);
   border-bottom: 1px solid rgba(244, 63, 94, 0.3);
@@ -279,8 +410,9 @@ function readFile(file) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--accent-rose);
+  gap: 12px;
   font-size: 12px;
+  color: #fb7185;
 }
 
 .error-info {
@@ -288,7 +420,6 @@ function readFile(file) {
   align-items: center;
   gap: 8px;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .error-msg {
@@ -300,47 +431,45 @@ function readFile(file) {
 .editor-body {
   flex: 1;
   display: flex;
-  position: relative;
   overflow: hidden;
+  position: relative;
 }
 
 .line-numbers {
   width: 48px;
-  padding: 12px 0;
-  background: var(--bg-surface-elevated);
-  border-right: 1px solid var(--border-subtle);
+  padding: 12px 8px 12px 0;
   text-align: right;
-  user-select: none;
-  overflow: hidden;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 20px;
+  line-height: 21px;
   color: var(--text-subtle);
+  user-select: none;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
 }
 
 .line-num {
-  padding-right: 12px;
+  height: 21px;
 }
 
 .code-textarea {
   flex: 1;
-  height: 100%;
   padding: 12px 16px;
-  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 21px;
   color: var(--text-main);
+  background: transparent;
   border: none;
   outline: none;
   resize: none;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 20px;
   white-space: pre;
-  tab-size: 2;
   overflow: auto;
+  tab-size: 2;
 }
 
 .code-textarea::placeholder {
   color: var(--text-subtle);
-  font-style: italic;
 }
 </style>

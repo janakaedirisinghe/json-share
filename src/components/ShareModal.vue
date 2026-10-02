@@ -14,8 +14,8 @@
             </svg>
           </div>
           <div>
-            <h3>Share JSON Payload</h3>
-            <p>Choose your preferred sharing mode</p>
+            <h3>{{ language === 'json' ? 'Share JSON Payload' : `Share ${languageName} Snippet` }}</h3>
+            <p>{{ language === 'json' ? 'Choose your preferred sharing mode' : `Share this ${languageName} snippet instantly` }}</p>
           </div>
         </div>
         <button class="btn btn-ghost btn-icon-only" @click="$emit('close')">✕</button>
@@ -186,17 +186,24 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useUrlShare } from '../composables/useUrlShare'
 import { formatBytes } from '../utils/jsonUtils'
+import { getLanguageById } from '../utils/languages'
 
 const props = defineProps({
   rawJson: {
     type: String,
     required: true
+  },
+  language: {
+    type: String,
+    default: 'json'
   }
 })
 
 const emit = defineEmits(['close', 'toast'])
 
 const { generateShareUrl, generateShortLink } = useUrlShare()
+
+const languageName = computed(() => getLanguageById(props.language).name)
 
 const shareMode = ref('short') // 'short' | 'private'
 const generatedUrl = ref('')
@@ -231,7 +238,7 @@ const urlHealthClass = computed(() => {
 })
 
 async function createPrivateLink() {
-  const res = await generateShareUrl(props.rawJson, enablePassword.value ? password.value : '')
+  const res = await generateShareUrl(props.rawJson, enablePassword.value ? password.value : '', props.language)
   generatedUrl.value = res.url
   if (showQr.value) {
     drawQr()
@@ -241,7 +248,7 @@ async function createPrivateLink() {
 async function handleCreateShortLink() {
   isGeneratingShortLink.value = true
   try {
-    const res = await generateShortLink(props.rawJson)
+    const res = await generateShortLink(props.rawJson, props.language)
     shortUrl.value = res.url
     emit('toast', 'Short link created successfully!', 'success')
     if (showQr.value) {

@@ -5,11 +5,15 @@
       :has-content="hasContent"
       :is-valid="isValid"
       :stats="stats"
+      :language="currentLanguage"
+      :line-count="lineCount"
       @format="formatJson"
       @minify="minifyJson"
       @repair="handleRepair"
       @clear="clearAll"
       @load-sample="loadSample"
+      @load-lang-sample="loadCurrentLangSample"
+      @select-language="onSelectLanguage"
       @open-share="openShareModal"
       @open-history="showHistoryDrawer = true"
       @open-bookmarklet="showBookmarkletModal = true"
@@ -26,7 +30,8 @@
           <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
           <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
         </svg>
-        <span>Viewing a <strong>Shared JSON Document</strong> via zero-backend link</span>
+        <span v-if="currentLanguage === 'json'">Viewing a <strong>Shared JSON Document</strong> via zero-backend link</span>
+        <span v-else>Viewing a <strong>Shared {{ currentLangName }} Snippet</strong> via zero-backend link</span>
       </div>
       <div class="banner-actions">
         <button class="btn btn-sm btn-banner" @click="saveCurrentToHistory" title="Save this document to your local history">
@@ -54,11 +59,11 @@
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
-            <h3>Password-Protected JSON</h3>
+            <h3>Password-Protected Content</h3>
           </div>
         </div>
         <div class="modal-body">
-          <p class="unlock-desc">This JSON payload was encrypted with AES-GCM 256-bit. Please enter the password to decrypt it:</p>
+          <p class="unlock-desc">This payload was encrypted with AES-GCM 256-bit. Please enter the password to decrypt it:</p>
           <div class="unlock-input-group">
             <input
               type="password"
@@ -79,7 +84,8 @@
 
     <!-- Mode Selector Navigation Bar -->
     <div class="mode-bar">
-      <div class="tab-list">
+      <!-- Tabs for JSON Mode -->
+      <div v-if="currentLanguage === 'json'" class="tab-list">
         <button
           class="mode-tab"
           :class="{ active: activeTab === 'tree' }"
@@ -150,6 +156,29 @@
         </button>
       </div>
 
+      <!-- Tabs for Code Snippet Mode -->
+      <div v-else class="tab-list">
+        <button
+          class="mode-tab active"
+          @click="activeTab = 'snippet'"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+          <span>{{ currentLangName }} Syntax View</span>
+        </button>
+
+        <button
+          class="mode-tab btn-switch-json"
+          @click="onSelectLanguage('json')"
+          title="Switch back to JSON Suite"
+        >
+          <span class="dot-sm"></span>
+          <span>Switch to JSON</span>
+        </button>
+      </div>
+
       <div class="mode-bar-right">
         <!-- Layout Toggle (Split vs Full) -->
         <button
@@ -174,17 +203,27 @@
           :model-value="rawJson"
           :is-valid="isValid"
           :parse-error="parseError"
+          :language="currentLanguage"
           @update:model-value="onSourceChange"
           @repair="handleRepair"
           @toast="triggerToast"
+          @change-language="onSelectLanguage"
         />
       </section>
 
       <!-- Right Panel: Active Viewer Mode -->
       <section class="workspace-panel panel-right">
+        <!-- Code Snippet Viewer for non-JSON or snippet tab -->
+        <CodeSnippetViewer
+          v-if="currentLanguage !== 'json' || activeTab === 'snippet'"
+          :code="rawJson"
+          :language="currentLanguage"
+          @toast="triggerToast"
+        />
+
         <!-- Tree View -->
         <JsonTreeView
-          v-if="activeTab === 'tree'"
+          v-else-if="activeTab === 'tree'"
           :parsed-data="parsedJson"
           :raw-json="rawJson"
           @toast="triggerToast"
@@ -226,7 +265,7 @@
       <div class="footer-left">
         <span class="footer-hint"><kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd> to Share</span>
         <span class="footer-divider">•</span>
-        <span class="footer-hint">100% Client-Side</span>
+        <span class="footer-hint">100% Client-Side & Zero-Backend</span>
       </div>
       <div class="footer-right">
         <span>Made with ❤️ by</span>
@@ -241,6 +280,7 @@
     <ShareModal
       v-if="showShareModal"
       :raw-json="rawJson"
+      :language="currentLanguage"
       @close="showShareModal = false"
       @toast="triggerToast"
     />
@@ -266,7 +306,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import HeaderNav from './components/HeaderNav.vue'
 import JsonInputEditor from './components/JsonInputEditor.vue'
 import JsonTreeView from './components/JsonTreeView.vue'
@@ -274,6 +314,7 @@ import JsonTableView from './components/JsonTableView.vue'
 import JsonGraphView from './components/JsonGraphView.vue'
 import JsonTypeGenerator from './components/JsonTypeGenerator.vue'
 import JsonDiffViewer from './components/JsonDiffViewer.vue'
+import CodeSnippetViewer from './components/CodeSnippetViewer.vue'
 import ShareModal from './components/ShareModal.vue'
 import HistoryDrawer from './components/HistoryDrawer.vue'
 import BookmarkletModal from './components/BookmarkletModal.vue'
@@ -282,6 +323,7 @@ import ToastNotification from './components/ToastNotification.vue'
 import { useJsonState } from './composables/useJsonState'
 import { useUrlShare } from './composables/useUrlShare'
 import { useHistory } from './composables/useHistory'
+import { getLanguageById } from './utils/languages'
 
 const {
   rawJson,
@@ -310,6 +352,7 @@ const {
 
 const { saveToHistory } = useHistory()
 
+const currentLanguage = ref('json')
 const showShareModal = ref(false)
 const showHistoryDrawer = ref(false)
 const showBookmarkletModal = ref(false)
@@ -319,6 +362,9 @@ const toastRef = ref(null)
 const unlockPassword = ref('')
 const unlockError = ref('')
 
+const currentLangName = computed(() => getLanguageById(currentLanguage.value).name)
+const lineCount = computed(() => rawJson.value ? rawJson.value.split('\n').length : 1)
+
 function triggerToast(msg, type = 'success') {
   if (toastRef.value?.showToast) {
     toastRef.value.showToast(msg, type)
@@ -327,6 +373,25 @@ function triggerToast(msg, type = 'success') {
 
 function onSourceChange(val) {
   setRawJson(val)
+}
+
+function onSelectLanguage(langId) {
+  currentLanguage.value = langId
+  if (langId !== 'json') {
+    activeTab.value = 'snippet'
+  } else {
+    if (activeTab.value === 'snippet') {
+      activeTab.value = 'tree'
+    }
+  }
+}
+
+function loadCurrentLangSample() {
+  const langObj = getLanguageById(currentLanguage.value)
+  if (langObj && langObj.sample) {
+    setRawJson(langObj.sample)
+    triggerToast(`Loaded sample for ${langObj.name}`, 'success')
+  }
 }
 
 function handleRepair() {
@@ -340,7 +405,7 @@ function handleRepair() {
 
 function openShareModal() {
   if (!hasContent.value) {
-    triggerToast('Please input JSON before sharing', 'warning')
+    triggerToast(`Please input ${currentLanguage.value === 'json' ? 'JSON' : 'code'} before sharing`, 'warning')
     return
   }
   saveToHistory(rawJson.value)
@@ -360,6 +425,8 @@ function onHistoryLoad(json) {
 
 function resetToDefault() {
   clearShareUrl()
+  currentLanguage.value = 'json'
+  activeTab.value = 'tree'
   loadSample('user_profile')
 }
 
@@ -373,8 +440,12 @@ async function attemptUnlock() {
     return
   }
   try {
-    const decrypted = await unlockEncryptedPayload(unlockPassword.value)
-    setRawJson(decrypted)
+    const unpacked = await unlockEncryptedPayload(unlockPassword.value)
+    if (unpacked.language && unpacked.language !== 'json') {
+      currentLanguage.value = unpacked.language
+      activeTab.value = 'snippet'
+    }
+    setRawJson(unpacked.data)
     unlockError.value = ''
     triggerToast('Decrypted successfully!', 'success')
   } catch (err) {
@@ -397,6 +468,7 @@ onMounted(async () => {
     try {
       const bookmarkletData = window.name.substring(16)
       window.name = '' // clear name
+      currentLanguage.value = 'json'
       setRawJson(bookmarkletData)
       formatJson(2)
       triggerToast('Opened from Browser Bookmarklet!', 'success')
@@ -409,8 +481,15 @@ onMounted(async () => {
   // 2. Check if opened with a shared payload or short link in URL hash
   const shared = await checkUrlForSharedData()
   if (shared && shared.data) {
+    if (shared.language && shared.language !== 'json') {
+      currentLanguage.value = shared.language
+      activeTab.value = 'snippet'
+    } else {
+      currentLanguage.value = 'json'
+    }
     setRawJson(shared.data)
-    triggerToast(shared.isShortLink ? 'Loaded from short link!' : 'Loaded shared JSON payload', 'success')
+    const langLabel = shared.language && shared.language !== 'json' ? `${getLanguageById(shared.language).name} snippet` : 'JSON payload'
+    triggerToast(shared.isShortLink ? `Loaded ${langLabel} from short link!` : `Loaded shared ${langLabel}`, 'success')
   } else if (!shared) {
     // Load default starter sample
     loadSample('user_profile')
@@ -455,30 +534,45 @@ onUnmounted(() => {
 }
 
 .btn-banner {
-  background: rgba(255, 255, 255, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  color: #ffffff !important;
-  font-weight: 600;
-  backdrop-filter: blur(4px);
-  transition: all 0.15s ease;
+  background: rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .btn-banner:hover {
-  background: rgba(255, 255, 255, 0.38);
-  border-color: #ffffff;
-  color: #ffffff !important;
-  transform: translateY(-1px);
+  background: rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.unlock-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.unlock-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.unlock-input-group .input-text {
+  flex: 1;
+}
+
+.unlock-error {
+  color: var(--accent-rose);
+  font-size: 12px;
+  margin-top: 8px;
 }
 
 .mode-bar {
   height: var(--toolbar-height);
-  background: var(--bg-surface);
+  background: var(--bg-surface-elevated);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  z-index: 30;
 }
 
 .tab-list {
@@ -493,8 +587,8 @@ onUnmounted(() => {
   gap: 6px;
   padding: 6px 12px;
   border-radius: var(--radius-sm);
+  border: 1px solid transparent;
   background: transparent;
-  border: none;
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
@@ -503,14 +597,34 @@ onUnmounted(() => {
 }
 
 .mode-tab:hover {
-  background: var(--bg-surface-hover);
   color: var(--text-main);
+  background: var(--bg-surface-hover);
 }
 
 .mode-tab.active {
-  background: var(--bg-surface-elevated);
   color: var(--accent-primary);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-switch-json {
+  color: var(--accent-cyan);
+  border: 1px dashed rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.05);
+  margin-left: 8px;
+}
+
+.btn-switch-json:hover {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.dot-sm {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
 }
 
 .mode-bar-right {
@@ -521,19 +635,26 @@ onUnmounted(() => {
 
 .workspace-main {
   flex: 1;
-  display: grid;
+  display: flex;
   overflow: hidden;
-  background: var(--bg-app);
+  position: relative;
 }
 
-.split-layout {
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  background: var(--border-subtle);
+.split-layout .panel-left {
+  width: 45%;
+  border-right: 1px solid var(--border-subtle);
 }
 
-.single-layout {
-  grid-template-columns: 1fr;
+.split-layout .panel-right {
+  width: 55%;
+}
+
+.single-layout .panel-left {
+  width: 100%;
+}
+
+.single-layout .panel-right {
+  width: 100%;
 }
 
 .workspace-panel {
@@ -542,26 +663,9 @@ onUnmounted(() => {
   background: var(--bg-surface);
 }
 
-.unlock-desc {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-
-.unlock-input-group {
-  display: flex;
-  gap: 8px;
-}
-
-.unlock-error {
-  color: var(--accent-rose);
-  font-size: 12px;
-  margin-top: 8px;
-}
-
 .app-footer {
-  height: 28px;
-  background: var(--bg-surface);
+  height: 32px;
+  background: var(--bg-surface-elevated);
   border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -569,58 +673,50 @@ onUnmounted(() => {
   padding: 0 16px;
   font-size: 11px;
   color: var(--text-muted);
-  user-select: none;
-  z-index: 30;
 }
 
-.footer-left, .footer-right {
+.footer-left {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.footer-divider {
-  color: var(--text-subtle);
-}
-
 .footer-hint kbd {
-  background: var(--bg-surface-elevated);
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: 3px;
   padding: 1px 4px;
+  border-radius: 3px;
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-main);
+}
+
+.footer-divider {
+  opacity: 0.4;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-author-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-primary);
+  text-decoration: none;
+  font-weight: 500;
+  transition: opacity 0.15s ease;
+}
+
+.footer-author-link:hover {
+  opacity: 0.85;
 }
 
 .author-avatar {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 1px solid rgba(13, 180, 158, 0.4);
-  object-fit: cover;
-  vertical-align: middle;
-}
-
-.footer-author-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--accent-primary);
-  text-decoration: none;
-  font-weight: 500;
-  transition: color 0.15s ease, text-decoration 0.15s ease;
-}
-
-.footer-author-link:hover {
-  text-decoration: underline;
-  color: #14d6bd;
-}
-
-@media (max-width: 860px) {
-  .split-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
-  }
 }
 </style>

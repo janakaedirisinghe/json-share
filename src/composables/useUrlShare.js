@@ -472,33 +472,58 @@ export function useUrlShare() {
   const encryptedPayload = ref('')
   const isLoadingShortLink = ref(false)
 
+  function unpackPayload(raw) {
+    if (typeof raw === 'string' && raw.trim().startsWith('{') && raw.includes('"_type"') && raw.includes('"snippet"')) {
+      try {
+        const obj = JSON.parse(raw)
+        if (obj && obj._type === 'snippet') {
+          return { data: obj.code || '', language: obj.lang || 'plaintext', isSnippet: true }
+        }
+      } catch (e) {
+        // Fallback to raw string
+      }
+    }
+    return { data: raw, language: 'json', isSnippet: false }
+  }
+
   /**
    * Generates compressed shareable URL
    */
-  async function generateShareUrl(rawJson, password = '') {
+  async function generateShareUrl(rawContent, password = '', language = 'json') {
     const baseUrl = `${window.location.origin}${window.location.pathname}`
+    
+    // If not JSON, package into snippet envelope
+    const payloadString = (language && language !== 'json')
+      ? JSON.stringify({ _type: 'snippet', lang: language, code: rawContent })
+      : rawContent
 
     if (password && password.trim()) {
-      const encrypted = await encryptData(rawJson, password.trim())
+      const encrypted = await encryptData(payloadString, password.trim())
       const compressed = compressToEncodedURIComponent(encrypted)
       return {
         url: `${baseUrl}#enc=${compressed}`,
-        isEncrypted: true
+        isEncrypted: true,
+        language
       }
     }
 
-    const compressed = compressToEncodedURIComponent(rawJson)
+    const compressed = compressToEncodedURIComponent(payloadString)
     return {
       url: `${baseUrl}#v1=${compressed}`,
-      isEncrypted: false
+      isEncrypted: false,
+      language
     }
   }
 
   /**
    * Generates an anonymous Short Link (under 40 chars total) using public paste storage
    */
-  async function generateShortLink(rawJson) {
+  async function generateShortLink(rawContent, language = 'json') {
     const baseUrl = `${window.location.origin}${window.location.pathname}`
+
+    const payloadString = (language && language !== 'json')
+      ? JSON.stringify({ _type: 'snippet', lang: language, code: rawContent })
+      : rawContent
 
     // 1. Try Bytebin (fast, CORS-friendly, zero-auth public pastebin)
     try {
@@ -507,7 +532,7 @@ export function useUrlShare() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: rawJson
+        body: payloadString
       })
       if (res.ok) {
         const data = await res.json()
@@ -515,7 +540,8 @@ export function useUrlShare() {
           return {
             url: `${baseUrl}#id=${data.key}`,
             id: data.key,
-            service: 'bytebin'
+            service: 'bytebin',
+            language
           }
         }
       }
@@ -526,7 +552,7 @@ export function useUrlShare() {
     // 2. Fallback: DPaste API
     try {
       const formData = new URLSearchParams()
-      formData.append('content', rawJson)
+      formData.append('content', payloadString)
       formData.append('expiry_days', '90')
       formData.append('format', 'json')
 
@@ -541,7 +567,8 @@ export function useUrlShare() {
         return {
           url: `${baseUrl}#dp=${id}`,
           id,
-          service: 'dpaste'
+          service: 'dpaste',
+          language
         }
       }
     } catch (err) {
@@ -564,7 +591,8 @@ export function useUrlShare() {
       const decompressed = decompressFromEncodedURIComponent(rawHash)
       if (decompressed) {
         isSharedSession.value = true
-        return { data: decompressed, encrypted: false }
+        const unpacked = unpackPayload(decompressed)
+        return { ...unpacked, encrypted: false }
       }
     }
 
@@ -589,9 +617,10 @@ export function useUrlShare() {
         try {
           const res = await fetch(`https://bytebin.lucko.me/${id}`)
           if (res.ok) {
-            const jsonText = await res.text()
+            const rawText = await res.text()
             isLoadingShortLink.value = false
-            return { data: jsonText, encrypted: false, isShortLink: true }
+            const unpacked = unpackPayload(rawText)
+            return { ...unpacked, encrypted: false, isShortLink: true }
           }
         } catch (err) {
           console.error('Failed to load short link payload', err)
@@ -610,9 +639,10 @@ export function useUrlShare() {
         try {
           const res = await fetch(`https://dpaste.com/${id}.txt`)
           if (res.ok) {
-            const jsonText = await res.text()
+            const rawText = await res.text()
             isLoadingShortLink.value = false
-            return { data: jsonText, encrypted: false, isShortLink: true }
+            const unpacked = unpackPayload(rawText)
+            return { ...unpacked, encrypted: false, isShortLink: true }
           }
         } catch (err) {
           console.error('Failed to load dpaste short link', err)
@@ -629,7 +659,7 @@ export function useUrlShare() {
     if (!encryptedPayload.value) throw new Error('No encrypted data found')
     const decrypted = await decryptData(encryptedPayload.value, password)
     isEncryptedSession.value = false
-    return decrypted
+    return unpackPayload(decrypted)
   }
 
   function clearShareUrl() {
